@@ -11,10 +11,11 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-from projects.cloud_session_controller import CloudClient, CloudSessionFacade, ActiveSessionsExceededException, \
+from projects.binder_client import BinderCliClient
+from projects.cloud_session_controller import CloudClientJwt, CloudSessionFacade, ActiveSessionsExceededException, \
     SessionException
 from projects.models import Project
-from projects.nixster_client import NixsterClient
+from projects.nixster_client import NixsterClientJwt
 from projects.project_views import ProjectPermissionsMixin
 from projects.session_models import Session, SessionRequest
 from projects.source_operations import utf8_path_join, utf8_normpath
@@ -71,15 +72,16 @@ class CloudClientMixin(object):
     session_facade: CloudSessionFacade
 
     def setup_cloud_client(self, project: Project) -> None:
-        server_host = settings.EXECUTION_SERVER_HOST
+        base_url = settings.EXECUTION_BASE_URL
         server_proxy_path = settings.EXECUTION_SERVER_PROXY_PATH
         jwt_secret = settings.JWT_SECRET
 
         client_class = {
-            'NIXSTER': NixsterClient
-        }.get(settings.EXECUTION_CLIENT, CloudClient)
+            'NIXSTER': NixsterClientJwt,
+            'BINDER': BinderCliClient
+        }.get(settings.EXECUTION_CLIENT, CloudClientJwt)
 
-        client = client_class(server_host, server_proxy_path, jwt_secret)
+        client = client_class(base_url, server_proxy_path, jwt_secret)
         self.session_facade = CloudSessionFacade(project, client)
 
 
@@ -243,6 +245,9 @@ class ProjectHostSessionsView(CloudClientMixin, ProjectHostBaseView):
         # has stopped. If we found a reference to a session that appear to be running then it will be a string with the
         # Session's URL
         session = self.get_session_from_request_session(request, session_key)
+
+        if session and not session.started:
+            self.session_facade.start_session(session)
 
         highest_permission = self.highest_permission
 

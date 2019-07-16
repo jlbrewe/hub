@@ -4,7 +4,7 @@ from unittest import mock
 
 from requests import HTTPError
 
-from projects.cloud_session_controller import CloudClient, CloudSessionFacade, SessionException, \
+from projects.cloud_session_controller import CloudClientJwt, CloudSessionFacade, SessionException, \
     ActiveSessionsExceededException
 from projects.project_models import Project
 from projects.session_models import SessionRequest, SessionStatus, Session
@@ -13,7 +13,7 @@ from projects.session_models import SessionRequest, SessionStatus, Session
 class SessionFacadeTests(TestCase):
     def setUp(self):
         self.project = mock.MagicMock(spec=Project, name="Project")
-        self.client = mock.MagicMock(spec=CloudClient, name="CloudClient")
+        self.client = mock.MagicMock(spec=CloudClientJwt, name="CloudClientJwt")
         self.cs_facade = CloudSessionFacade(self.project, self.client)
 
     def test_init(self):

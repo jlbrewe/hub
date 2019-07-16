@@ -1,7 +1,7 @@
 import typing
 from urllib.parse import urlparse, quote, urlunparse
 
-from projects.client_base import RestClientBase, HttpMethod, SessionAttachContext, SessionInformation, SessionLocation
+from projects.client_base import JwtRestClient, HttpMethod, SessionAttachContext, SessionInformation, SessionLocation
 from projects.session_models import SessionStatus, Session
 
 
@@ -15,7 +15,7 @@ def safe_int(v: typing.Any) -> typing.Optional[int]:
         return None
 
 
-class NixsterClient(RestClientBase):
+class NixsterClientJwt(JwtRestClient):
     class_id = 'NIXSTER'
 
     def start_container(self, environment_id: str, session_parameters: typing.Optional[dict] = None,
@@ -45,7 +45,7 @@ class NixsterClient(RestClientBase):
             'environmentId': environment_id,
             'containerId': container_id
         }
-        self.make_request(HttpMethod.POST, self.get_full_url('stop'), extra_jwt_payload={'cid': container_id},
+        self.make_request(HttpMethod.POST, self.get_full_url('stop'), extra_auth_payload={'cid': container_id},
                           body_data=request_data)
 
     def execute(self, environment_id: str, container_id: str, command: str) -> str:
@@ -56,7 +56,7 @@ class NixsterClient(RestClientBase):
         }
 
         response = self.make_request(HttpMethod.POST, self.get_full_url('execute'),
-                                     extra_jwt_payload={'cid': container_id}, body_data=request_data)
+                                     extra_auth_payload={'cid': container_id}, body_data=request_data)
         return response['output']
 
     def generate_attach_context(self, environment_id: str, container_id: str) -> SessionAttachContext:
@@ -78,7 +78,7 @@ class NixsterClient(RestClientBase):
             host = None
             path = self.server_proxy_path
         else:
-            host = self.server_host
+            host = self.base_url
             path = ''
 
         separator = '' if path.endswith('/') else '/'
@@ -109,7 +109,7 @@ class NixsterClient(RestClientBase):
         }
 
         response = self.make_request(HttpMethod.POST, self.get_full_url('container-status'),
-                                     extra_jwt_payload={'cid': session.execution_id}, body_data=request_data)
+                                     extra_auth_payload={'cid': session.execution_id}, body_data=request_data)
 
         if response['status'] == 'RUNNING':
             return SessionInformation(SessionStatus.RUNNING)

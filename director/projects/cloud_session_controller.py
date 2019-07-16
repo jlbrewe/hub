@@ -7,7 +7,8 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 
-from projects.client_base import RestClientBase, HttpMethod, SessionAttachContext, SessionInformation, SessionLocation
+from projects.client_base import JwtRestClient, HttpMethod, SessionAttachContext, SessionInformation, SessionLocation, \
+    RestClientBase
 from projects.models import Project, Session
 from projects.session_models import SessionStatus, SessionRequest, SESSION_QUEUE_CHECK_TIMEOUT, \
     SESSION_QUEUE_CREATION_TIMEOUT
@@ -34,7 +35,7 @@ SESSION_STATUS_LOOKUP = {
 }
 
 
-class CloudClient(RestClientBase):
+class CloudClientJwt(JwtRestClient):
     """Client for interaction with Stencila Cloud."""
 
     class_id = 'CLOUD'
@@ -219,6 +220,9 @@ class CloudSessionFacade(object):
 
         # TODO should we record some of the request
         # headers e.g. `REMOTE_ADDR`, `HTTP_USER_AGENT`, `HTTP_REFERER` for analytics?
+
+        if attach_context.session:  # The client has created the session itself
+            return attach_context.session
 
         return Session.objects.create(
             project=self.project,

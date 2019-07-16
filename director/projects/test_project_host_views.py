@@ -408,7 +408,7 @@ class TestProjectSessionRequestView(TestCase):
     @mock.patch('projects.project_host_views.JsonResponse')
     @mock.patch('projects.project_host_views.settings')
     def test_get_with_success(self, mock_settings, mock_json_response_class, mock_get_object):
-        mock_settings.EXECUTION_SERVER_HOST = 'server_host'
+        mock_settings.EXECUTION_SERVER_HOST = 'base_url'
         mock_settings.EXECUTION_SERVER_PROXY_PATH = '/proxy'
         mock_settings.JWT_SECRET = 'abc123'
 

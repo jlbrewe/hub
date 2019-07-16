@@ -35,6 +35,7 @@ class SessionLocation(typing.NamedTuple):
 class SessionAttachContext(typing.NamedTuple):
     url: str
     execution_id: str = ''
+    session: typing.Optional[Session] = None  # The AttachContext creator might also create the session itself
 
     def to_dict(self) -> dict:
         return {'execution_id': self.execution_id, 'url': self.url}
@@ -42,25 +43,23 @@ class SessionAttachContext(typing.NamedTuple):
 
 class RestClientBase(object):
     class_id: typing.Optional[str] = None  # NOQA flake8 is dumb and thinks I am defining a class here so gives E701
-    server_host: str
+    base_url: str
     server_proxy_path: str
-    jwt_secret: str
 
-    def __init__(self, server_host: str, server_proxy_path: str, jwt_secret: str) -> None:
-        assert len(server_host)
-        self.server_host = server_host
+    def __init__(self, base_url: str, server_proxy_path: str) -> None:
+        assert len(base_url)
+        if not base_url.endswith('/'):
+            base_url += '/'
+        self.base_url = base_url
         self.server_proxy_path = server_proxy_path
-        self.jwt_secret = jwt_secret
 
     def get_authorization_header(self, extra_payload: typing.Optional[dict] = None) -> typing.Dict[str, str]:
-        return {
-            "Authorization": "Bearer {}".format(self.generate_jwt_token(extra_payload))
-        }
+        raise NotImplementedError('Subclasses must implement get_authorization_header')
 
-    def make_request(self, method: HttpMethod, url: str, extra_jwt_payload: typing.Optional[dict] = None,
-                     body_data: typing.Optional[dict] = None) -> dict:
+    def make_request(self, method: HttpMethod, url: str, extra_auth_payload: typing.Optional[dict] = None,
+                     body_data: typing.Optional[dict] = None) -> typing.Optional[dict]:
         # TODO: add `SessionParameters` to the POST body (currently they won't do anything anyway)
-        response = requests.request(method.value, url, headers=self.get_authorization_header(extra_jwt_payload),
+        response = requests.request(method.value, url, headers=self.get_authorization_header(extra_auth_payload),
                                     json=body_data, timeout=25)
 
         try:
@@ -71,22 +70,16 @@ class RestClientBase(object):
                 pass
             raise e
 
+        if len(response.content) == 0:
+            return None
+
         try:
             return response.json()
         except Exception:
             raise Exception('Error parsing body: ' + response.text)
 
     def get_full_url(self, path: str) -> str:
-        return urljoin('http://' + self.server_host, path)
-
-    def generate_jwt_token(self, extra_payload: typing.Optional[dict] = None) -> str:
-        """Create a JWT token for the host."""
-        jwt_payload = {"iat": time.time()}
-
-        if extra_payload:
-            jwt_payload.update(extra_payload)
-
-        return jwt.encode(jwt_payload, self.jwt_secret, algorithm=JWT_ALGORITHM).decode("utf-8")
+        return urljoin(self.base_url, path)
 
     def start_session(self, environ: str, session_parameters: dict) -> SessionAttachContext:
         raise NotImplementedError('Subclasses must implement start_session')
@@ -99,3 +92,25 @@ class RestClientBase(object):
     def get_session_info(self, session: Session) -> SessionInformation:
         """Get information about the session. At this stage we are only interested in its status."""
         raise NotImplementedError('Subclasses must implement get_session_info')
+
+
+class JwtRestClient(RestClientBase):
+    jwt_secret: str
+
+    def __init__(self, base_url: str, server_proxy_path: str, jwt_secret: str) -> None:
+        super(JwtRestClient, self).__init__(base_url, server_proxy_path)
+        self.jwt_secret = jwt_secret
+
+    def get_authorization_header(self, extra_payload: typing.Optional[dict] = None) -> typing.Dict[str, str]:
+        return {
+            "Authorization": "Bearer {}".format(self.generate_jwt_token(extra_payload))
+        }
+
+    def generate_jwt_token(self, extra_payload: typing.Optional[dict] = None) -> str:
+        """Create a JWT token for the host."""
+        jwt_payload = {"iat": time.time()}
+
+        if extra_payload:
+            jwt_payload.update(extra_payload)
+
+        return jwt.encode(jwt_payload, self.jwt_secret, algorithm=JWT_ALGORITHM).decode("utf-8")
